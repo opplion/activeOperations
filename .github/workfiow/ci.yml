@@ -1,0 +1,40 @@
+name: CI
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Deploy via SSH
+        run: |
+          ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT }} ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+            set -e
+            cd /var/www/Sponsor-Pro/server   # ← 替换成你的项目部署目录
+            git reset --hard
+            git pull
+
+            echo "🛑 停止旧容器..."
+            docker compose down || echo "⚠️ 无旧容器可停止"
+
+            echo "🔨 构建新镜像..."
+            docker compose build --no-cache || {
+              echo "❌ 构建失败";
+              exit 1;
+            }
+
+            echo "🚀 启动新版本..."
+            docker compose up -d --force-recreate --remove-orphans || {
+                echo "❌ 启动失败";
+                exit 1;
+            }
+
+            docker container prune -f || echo "⚠️ 无容器可清理"
+            docker image prune -a -f --filter "until=24h" || echo "⚠️ 无镜像可清理"
+          EOF

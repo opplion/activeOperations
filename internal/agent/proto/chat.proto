@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package chat;
+
+option go_package = "./proto";
+
+// 对话服务定义
+service ChatService {
+  // 发送消息并获取回复
+  rpc SendMessage(MessageRequest) returns (MessageResponse);
+}
+
+// 请求消息\smessage MessageRequest {
+  string content = 1; // 用户输入的消息内容
+  string session_id = 2; // 会话ID，用于维护上下文
+  map<string, string> metadata = 3; // 可选的元数据
+}
+
+// 响应消息
+message MessageResponse {
+  string content = 1; // 生成的回复内容
+  string session_id = 2; // 会话ID
+  bool success = 3; // 是否成功
+  string error = 4; // 错误信息（如果失败）
+  int64 processing_time_ms = 5; // 处理时间（毫秒）
+}
