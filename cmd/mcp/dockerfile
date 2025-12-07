@@ -13,12 +13,8 @@ RUN go mod download
 
 COPY . .
 
-# 复制 agent 特有资源到 builder（只复制一次）
-RUN mkdir -p /source
-COPY bash /source/bash
-
 # 编译指定微服务
-RUN CGO_ENABLED=0 GOOS=linux go build -o app ./cmd/${SERVICE}
+RUN CGO_ENABLED=0 GOOS=linux go build -o app ./cmd/mcp
 
 
 ###########################
@@ -31,16 +27,11 @@ ARG SERVICE
 WORKDIR /activeOperations
 
 COPY --from=builder /activeOperations/app .
-COPY ./config.yaml ./config.yaml
-
-COPY --from=builder /source /source
+COPY --from=builder /activeOperations/k8s .
 
 # 只有 agent 服务才需要文档与 bash 资源
-RUN if [ "$SERVICE" = "agent" ]; then \
-        apk add --no-cache git bash && \
-        cp -r /source/bash /activeOperations/bash ; \
-    fi
 
-EXPOSE 8080
+
+EXPOSE 4321
 
 CMD ["./app"]

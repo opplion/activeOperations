@@ -1,29 +1,54 @@
 package model
 
 import (
-	"context"
-	"sync"
 	"activeOperations/config"
-	"github.com/cloudwego/eino-ext/components/model/qwen"
-	"github.com/cloudwego/eino/components/model"
-	"time"
+	"activeOperations/internal/agent/tools"
+	"context"
 	"strings"
+	"sync"
+	"time"
+
+	"github.com/cloudwego/eino-ext/components/model/qwen"
+	"github.com/cloudwego/eino/compose"
+	"github.com/cloudwego/eino/flow/agent/react"
 )
 
 var (
 	once      sync.Once
-	ChatModel model.ToolCallingChatModel
+	agent     *react.Agent
 	initErr   error
 )
 
 func LoadModel() error {
 	once.Do(func() {
-		ChatModel, initErr = qwen.NewChatModel(context.Background(), &qwen.ChatModelConfig{
+		ctx := context.Background()
+		ChatModel, Err := qwen.NewChatModel(context.Background(), &qwen.ChatModelConfig{
 			BaseURL: strings.TrimSpace("https://dashscope.aliyuncs.com/compatible-mode/v1"),
 			APIKey:  config.GetConfig().Model.Apikey,
 			Timeout: 15 * time.Second,
 			Model:   config.GetConfig().Model.Model,
 		})
+		if Err != nil {
+			initErr = Err
+			return
+		}
+		toolsList, Err := tools.GetK8sTools()
+		if Err != nil {
+			initErr = Err
+			return
+		}
+		agent, Err = react.NewAgent(ctx, &react.AgentConfig{
+			Model:       ChatModel,
+			ToolsConfig: compose.ToolsNodeConfig{Tools: toolsList},
+		})
+		if Err != nil {
+			initErr = Err
+			return 
+		}
 	})
 	return initErr
+}
+
+func GetAgent() (*react.Agent, error) {
+	return agent, nil
 }

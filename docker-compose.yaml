@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   # Milvus 向量数据库服务
@@ -66,13 +65,14 @@ services:
   agent:
     build:
       context: .
-      dockerfile: dockerfile
+      dockerfile: ./cmd/agent/dockerfile
       args:
         - SERVICE=agent
     container_name: agent
     restart: always
     depends_on:
       - milvus
+      - mcp
     environment:
       - SERVICE=agent
     volumes:
@@ -80,7 +80,20 @@ services:
       - ./bash:/activeOperations/bash
     ports:
       - "8080:8080"  # Agent 服务端口
-
+  mcp:
+    build:
+      context: .
+      dockerfile: ./cmd/mcp/dockerfile
+      args:
+        - SERVICE=mcp
+    container_name: mcp
+    restart: always
+    environment:
+      - SERVICE=mcp
+    volumes:
+      - ./config.yaml:/activeOperations/config.yaml
+    ports:
+      - "4321:4321"  # MCP 服务端口
 # 卷配置
 volumes:
   milvus-data:
