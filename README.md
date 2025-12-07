@@ -17,7 +17,7 @@ activeOperations 是一个基于 Go 语言开发的智能运营平台，集成�
 | LLM 框架 | Eino | v0.7.0 | 大语言模型集成 |
 | 模型支持 | Qwen | v0.1.2 | 通义千问模型 |
 | 容器化 | Docker | - | 应用容器化 |
-| K8s 管理工具 | MCP | - | Kubernetes 集群管理 |
+| K8s 管理工具 | MCP (kom) | - | Kubernetes 集群管理 |
 
 ### 2.2 关键依赖
 
