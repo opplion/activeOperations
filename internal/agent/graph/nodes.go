@@ -41,14 +41,14 @@ func MilvusRetrieverHandler(ctx context.Context, query string) (*input, error) {
 	}, nil
 }
 
-func ReactAgentHandler(ctx context.Context, query []*schema.Message) (*schema.Message, error) {
+func ReactAgentHandler(ctx context.Context, query []*schema.Message) (*schema.StreamReader[*schema.Message], error) {
 	agentModel,err := model.GetAgent()
 	if err!=nil {
 		return nil, err
 	}
-	resp, err := agentModel.Generate(ctx,query)
+	msgReader, err := agentModel.Stream(ctx,query)
 	if err != nil {
 		return nil, err
 	}
-	return resp, nil
+	return  msgReader,nil
 }

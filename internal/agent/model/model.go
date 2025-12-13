@@ -6,7 +6,6 @@ import (
 	"context"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/cloudwego/eino-ext/components/model/qwen"
 	"github.com/cloudwego/eino/compose"
@@ -25,7 +24,7 @@ func LoadModel() error {
 		ChatModel, Err := qwen.NewChatModel(context.Background(), &qwen.ChatModelConfig{
 			BaseURL: strings.TrimSpace("https://dashscope.aliyuncs.com/compatible-mode/v1"),
 			APIKey:  config.GetConfig().Model.Apikey,
-			Timeout: 15 * time.Second,
+			Timeout: 0,
 			Model:   config.GetConfig().Model.Model,
 		})
 		if Err != nil {

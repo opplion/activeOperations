@@ -13,16 +13,16 @@ import (
 )
 
 var (
-	globalGraph compose.Runnable[string, *schema.Message]
+	globalGraph compose.Runnable[string, *schema.StreamReader[*schema.Message]]
 	globalGraphErr error
 	onceGraph   sync.Once
 )
 
-func GetWorkflow() (compose.Runnable[string, *schema.Message], error) {
+func GetWorkflow() (compose.Runnable[string, *schema.StreamReader[*schema.Message]], error) {
 	onceGraph.Do(func() {
 		ctx := context.Background()
 		var err error
-		wf := compose.NewWorkflow[string, *schema.Message]()
+		wf := compose.NewWorkflow[string, *schema.StreamReader[*schema.Message]]()
 		wf.AddLambdaNode("MilvusRetriever", compose.InvokableLambda(MilvusRetrieverHandler)).AddInput(compose.START)
 		wf.AddLambdaNode("merge", compose.InvokableLambda(lambdaHandler)).AddInput("MilvusRetriever")
 		wf.AddLambdaNode("QwenModel", compose.InvokableLambda(ReactAgentHandler)).AddInput("merge")
@@ -73,26 +73,4 @@ func ReloadRAG() error {
 		}
 	}
 	return nil
-}
-
-// ProcessMessage 处理用户消息并生成回复
-func ProcessMessage(ctx context.Context, message string) (string, error) {
-	// 获取工作流
-	workflow, err := GetWorkflow()
-	if err != nil {
-		return "", fmt.Errorf("获取工作流失败: %v", err)
-	}
-
-	// 执行工作流处理消息
-	response, err := workflow.Invoke(ctx, message)
-	if err != nil {
-		return "", fmt.Errorf("执行工作流失败: %v", err)
-	}
-
-	// 检查响应是否为空
-	if response == nil || response.Content == "" {
-		return "抱歉，我无法生成回复", nil
-	}
-
-	return response.Content, nil
 }
