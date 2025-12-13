@@ -22,5 +22,6 @@ func GetGinApp() *gin.Engine {
 }
 
 func AddRoutes(app *gin.Engine) {
-	app.POST("/api/chat",controller.StartChat)
+	app.POST("/api/chat/send",controller.StartChat)
+	app.POST("/api/chat/cancel",controller.EndChat)
 }
