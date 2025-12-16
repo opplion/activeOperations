@@ -66,8 +66,6 @@ services:
     build:
       context: .
       dockerfile: ./cmd/agent/dockerfile
-      args:
-        - SERVICE=agent
     container_name: agent
     restart: always
     depends_on:
@@ -77,7 +75,7 @@ services:
       - SERVICE=agent
     volumes:
       - ./config.yaml:/activeOperations/config.yaml
-      - ./bash:/activeOperations/bash
+      - ./docs:/activeOperations/docs
     ports:
       - "8080:8080"  # Agent 服务端口
   mcp:

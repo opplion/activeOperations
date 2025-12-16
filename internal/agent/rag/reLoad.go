@@ -4,22 +4,18 @@ import (
 	"context"
 	"github.com/milvus-io/milvus/client/v2/milvusclient"
 	"activeOperations/config"
-	"log"
 )
 
-func ReloadRAG() error {
+func DefaultForword() error {
+	testCollection := MilvusSDK.Reload()
 	ctx := context.Background()
-	err := Client.DropCollection(ctx, milvusclient.NewDropCollectionOption(config.GetConfig().Milvus.CollectionName))
-	if err != nil {
-		return err
-	}
-	err = Client.CreateCollection(ctx, milvusclient.NewCreateCollectionOption(config.GetConfig().Milvus.CollectionName, Schema).
-		WithIndexOptions(IndexOptions...))
+	err := Client.CreateCollection(ctx, milvusclient.NewCreateCollectionOption(testCollection, Schema).
+		WithIndexOptions(NewIndexOptions(testCollection)...))
 	if err != nil {
 		return err
 	}
 
-	task, err := Client.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(config.GetConfig().Milvus.CollectionName))
+	task, err := Client.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(testCollection))
 	if err != nil {
 		return err
 	}
@@ -27,6 +23,36 @@ func ReloadRAG() error {
 	if err != nil {
 		return err
 	}
-	log.Println("Milvus collection reloaded successfully")
+	return nil
+}
+
+func DefaultBackword() error {
+	ctx := context.Background()
+	err := Client.ReleaseCollection(ctx, milvusclient.NewReleaseCollectionOption(MilvusSDK.test_Collection))
+	if err != nil {
+		return err
+    }
+	err = Client.DropCollection(ctx, milvusclient.NewDropCollectionOption(MilvusSDK.test_Collection))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func DefaultFinal() error {
+	oldCollection:=MilvusSDK.Publish()
+	ctx := context.Background()
+	err := Client.AlterAlias(ctx, milvusclient.NewAlterAliasOption(config.GetConfig().Milvus.CollectionName, MilvusSDK.online_Collection))
+	if err != nil {
+		return err
+	}
+	err = Client.ReleaseCollection(ctx, milvusclient.NewReleaseCollectionOption(oldCollection))
+    if err != nil {
+		return err
+    }
+	err = Client.DropCollection(ctx, milvusclient.NewDropCollectionOption(oldCollection))
+	if err != nil {
+		return err
+	}
 	return nil
 }

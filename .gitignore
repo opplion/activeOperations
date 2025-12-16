@@ -1,3 +1,4 @@
 volumes
 config.yaml
 k8s
+docs

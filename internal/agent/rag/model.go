@@ -9,7 +9,6 @@ import (
 
 var (
 	Schema       *entity.Schema
-	IndexOptions []milvusclient.CreateIndexOption
 )
 
 // 生成 Schema
@@ -23,10 +22,9 @@ func NewSchema() {
 }
 
 // 生成 IndexOptions
-func NewIndexOptions() {
-	cfg := config.GetConfig()
-	IndexOptions = []milvusclient.CreateIndexOption{
-		milvusclient.NewCreateIndexOption(cfg.Milvus.CollectionName, "vector", index.NewAutoIndex(entity.COSINE)),
-		milvusclient.NewCreateIndexOption(cfg.Milvus.CollectionName, "id", index.NewAutoIndex(entity.COSINE)),
+func NewIndexOptions(CollectionName string) []milvusclient.CreateIndexOption {
+	return []milvusclient.CreateIndexOption{
+		milvusclient.NewCreateIndexOption(CollectionName, "vector", index.NewAutoIndex(entity.COSINE)),
+		milvusclient.NewCreateIndexOption(CollectionName, "id", index.NewAutoIndex(entity.COSINE)),
 	}
 }

@@ -47,12 +47,12 @@ func ReloadRAG() error {
 	if err!=nil {
 		return err
 	}
-	err = rag.ReloadRAG()
+	err = rag.DefaultForword()
 	if err!=nil {
 		return err
 	}
 	var files []string
-	root := "./website/content/zh-cn/docs/concepts"
+	root := "./docs"
 	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -69,8 +69,12 @@ func ReloadRAG() error {
 		_, err := run.Invoke(ctx, document.Source{URI: path})
 		fmt.Printf("Processing file %d/%d: %s\n", i+1, len(files), path)
 		if err!=nil {
+			//回滚
+			rag.DefaultBackword()
 			return err
 		}
 	}
+	rag.DefaultFinal()
 	return nil
 }
+

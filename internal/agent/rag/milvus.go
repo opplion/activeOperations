@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
+	"github.com/google/uuid"
 	"github.com/cloudwego/eino/components/indexer"
 	"github.com/cloudwego/eino/components/retriever"
 	"github.com/cloudwego/eino/schema"
@@ -15,6 +15,7 @@ import (
 	"github.com/milvus-io/milvus/client/v2/entity"
 	"github.com/milvus-io/milvus/client/v2/milvusclient"
 	"golang.org/x/sync/errgroup"
+	"strings"
 )
 
 var (
@@ -27,7 +28,9 @@ type Retriever struct {
 	Client      *milvusclient.Client
 	ScoreThresh float32
 	Embedding   *Embedder
-	Collection  string
+	online_Collection  string
+	test_Collection string
+	lock       sync.Mutex
 }
 
 func MilvusInit() error {
@@ -41,54 +44,72 @@ func MilvusInit() error {
 
 func doMilvusInit(ctx context.Context) error {
 	cfg := config.GetConfig().Milvus
+
 	cli, err := milvusclient.New(ctx, &milvusclient.ClientConfig{
-		Address:  cfg.Host + ":" + cfg.Port,
+		Address: cfg.Host + ":" + cfg.Port,
 	})
 	if err != nil {
 		return err
 	}
 
-	// 是否存在 collection
-	has, err := cli.HasCollection(ctx, milvusclient.NewHasCollectionOption(cfg.CollectionName))
-	if err != nil {
-		return err
-	}
+	// 尝试描述别名，判断别名是否存在
+	res, aliasErr := cli.DescribeAlias(ctx, milvusclient.NewDescribeAliasOption(cfg.CollectionName))
+	fmt.Println(aliasErr)
+	aliasExists := aliasErr == nil
 
-	// 不存在就创建
-	if !has {
+	var targetCollection string
+
+	if !aliasExists {
+		// 别名不存在，需要创建 collection 并绑定别名
+
+		// 这里直接使用 cfg.CollectionName 作为 collection 名（也可以另起名）
+		collectionName := NewUniqueCollectionName(cfg.CollectionName)
 		err = cli.CreateCollection(
 			ctx,
-			milvusclient.NewCreateCollectionOption(cfg.CollectionName, Schema).
-				WithIndexOptions(IndexOptions...),
+			milvusclient.NewCreateCollectionOption(collectionName, Schema).
+			WithIndexOptions(NewIndexOptions(collectionName)...),
 		)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to create collection %s: %w", collectionName, err)
 		}
+
+		err = cli.CreateAlias(
+			ctx,
+			milvusclient.NewCreateAliasOption(collectionName, cfg.CollectionName),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create alias %s for collection %s: %w", cfg.CollectionName, collectionName, err)
+		}
+
+		targetCollection = collectionName
+	} else {
+		targetCollection = res.CollectionName
 	}
 
-	// Load collection
-	loadTask, err := cli.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(cfg.CollectionName))
+	// 加载 collection
+	loadTask, err := cli.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(targetCollection))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load collection %s: %w", targetCollection, err)
 	}
 	if err := loadTask.Await(ctx); err != nil {
-		return err
+		return fmt.Errorf("failed to await load of collection %s: %w", targetCollection, err)
 	}
+
 	Client = cli
-	MilvusSDK = NewMilvusSDK(ctx, cli, 0.5, GetEmbedder())
-	// if MilvusSDK == nil {
-	// 	return fmt.Errorf("failed to create MilvusSDK")
-	// }
+	MilvusSDK = NewMilvusSDK(ctx, cli, 0.5, GetEmbedder(),targetCollection)
+
 	return nil
 }
 
 // NewRetriever 创建 Retriever
-func NewMilvusSDK(ctx context.Context, cli *milvusclient.Client, scoreThresh float32, emb *Embedder) *Retriever {
+func NewMilvusSDK(ctx context.Context, cli *milvusclient.Client, scoreThresh float32, emb *Embedder, collectionName string) *Retriever {
 	return &Retriever{
 		Client:      cli,
 		ScoreThresh: scoreThresh,
 		Embedding:   emb,
-		Collection:  config.GetConfig().Milvus.CollectionName,
+		online_Collection:  collectionName,
+		test_Collection: "",
+		lock: sync.Mutex{},
 	}
 }
 
@@ -99,7 +120,7 @@ func (r *Retriever) Retrieve(ctx context.Context, query string, opts ...retrieve
 		return nil, fmt.Errorf("failed to embed query: %w", err)
 	}
 	searchOpt := milvusclient.NewSearchOption(
-		r.Collection,
+		r.online_Collection,
 		5,
 		[]entity.Vector{entity.FloatVector(vectors[0])},
 	).WithConsistencyLevel(entity.ClSession).
@@ -171,7 +192,7 @@ func (r *Retriever) Store(ctx context.Context, docs []*schema.Document, opts ...
             }
 
             // 4. 插入 Milvus
-            opt := milvusclient.NewColumnBasedInsertOption(r.Collection).
+            opt := milvusclient.NewColumnBasedInsertOption(r.test_Collection).
                 WithInt64Column("id", ids).
                 WithFloatVectorColumn("vector", len(vectors[0]), vectors).
                 WithVarcharColumn("content", contents).
@@ -190,4 +211,25 @@ func (r *Retriever) Store(ctx context.Context, docs []*schema.Document, opts ...
     }
 
     return nil, nil
+}
+
+func NewUniqueCollectionName(prefix string) string {
+    uid := uuid.NewString()
+	uid = strings.ReplaceAll(uid, "-", "")
+    return fmt.Sprintf("%s_%s", prefix, uid)
+}
+
+func (r *Retriever) Publish() string {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	oldCollection := r.online_Collection
+	r.online_Collection = r.test_Collection
+	return oldCollection
+}
+
+func (r *Retriever) Reload() string {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.test_Collection = NewUniqueCollectionName(config.GetConfig().Milvus.CollectionName)
+	return r.test_Collection
 }
